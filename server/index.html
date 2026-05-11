@@ -97,15 +97,24 @@ canvas { display:block; }
 #auth-status { color:#7ec850;font-size:11px; }
 /* Online players panel */
 #online-panel { position:fixed;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);border:1px solid #333;padding:4px 12px;font-family:'Courier New',monospace;font-size:11px;color:#aaa;pointer-events:none;display:none; }
-/* Chat */
-#chat-wrap { position:fixed;bottom:90px;left:10px;width:340px;display:flex;flex-direction:column;gap:3px;pointer-events:none;z-index:60; }
-#chat-log { display:flex;flex-direction:column;gap:2px;max-height:180px;overflow:hidden;justify-content:flex-end; }
-.chat-msg { font-family:'Courier New',monospace;font-size:12px;color:#fff;background:rgba(0,0,0,0.5);padding:2px 7px;border-radius:2px;word-break:break-word;transition:opacity 1s;line-height:1.5; }
+/* Chat panel */
+#chat-panel { position:fixed;right:12px;bottom:80px;width:320px;display:flex;flex-direction:column;background:rgba(0,0,0,0.78);border:1px solid #333;font-family:'Courier New',monospace;z-index:60;pointer-events:all; }
+#chat-header { display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #333;cursor:pointer;user-select:none; }
+#chat-header span { font-size:11px;color:#7ec850;letter-spacing:2px; }
+#chat-toggle-btn { font-size:10px;color:#555;background:none;border:none;color:#666;cursor:pointer;font-family:inherit; }
+#chat-body { display:flex;flex-direction:column; }
+#chat-log { height:220px;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:3px; }
+#chat-log::-webkit-scrollbar { width:4px; }
+#chat-log::-webkit-scrollbar-thumb { background:#333; }
+.chat-msg { font-size:11px;color:#ccc;line-height:1.6;word-break:break-word; }
 .chat-msg .chat-name { font-weight:bold; }
-.chat-msg.fading { opacity:0; }
-#chat-input-wrap { display:none;pointer-events:all; }
-#chat-input { width:100%;background:rgba(0,0,0,0.75);border:1px solid #7ec850;color:white;font-family:'Courier New',monospace;font-size:13px;padding:6px 10px;outline:none;box-sizing:border-box; }
-#chat-hint { font-family:'Courier New',monospace;font-size:10px;color:#555;padding:2px 4px; }
+.chat-msg .chat-time { color:#444;font-size:10px;margin-right:4px; }
+.chat-system { font-size:10px;color:#555;font-style:italic;padding:1px 0; }
+#chat-input-row { display:flex;border-top:1px solid #333; }
+#chat-input { flex:1;background:transparent;border:none;color:white;font-family:'Courier New',monospace;font-size:12px;padding:7px 10px;outline:none; }
+#chat-send-btn { background:#2a4a2a;border:none;border-left:1px solid #333;color:#7ec850;font-family:inherit;font-size:11px;padding:0 12px;cursor:pointer;letter-spacing:1px; }
+#chat-send-btn:hover { background:#3a6a3a; }
+#chat-hint-row { font-size:9px;color:#333;padding:2px 10px 4px;text-align:right; }
 /* Chest */
 .chest-grid { display:grid;grid-template-columns:repeat(9,46px);gap:2px; }
 .chest-slot,.inv-slot { width:46px;height:46px;border:2px solid #555;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:2px;position:relative;user-select:none; }
@@ -245,11 +254,18 @@ canvas { display:block; }
 </div>
 <div id="hotbar"></div>
 <div id="online-panel"></div>
-<div id="chat-wrap">
-  <div id="chat-log"></div>
-  <div id="chat-input-wrap">
-    <input id="chat-input" maxlength="200" placeholder="Say something…">
-    <div id="chat-hint">Enter to send · Esc to close</div>
+<div id="chat-panel">
+  <div id="chat-header" onclick="toggleChatPanel()">
+    <span>&#128172; CHAT</span>
+    <button id="chat-toggle-btn">▾ hide</button>
+  </div>
+  <div id="chat-body">
+    <div id="chat-log"></div>
+    <div id="chat-input-row">
+      <input id="chat-input" maxlength="200" placeholder="Press T to chat…">
+      <button id="chat-send-btn" onclick="sendChat()">SEND</button>
+    </div>
+    <div id="chat-hint-row">T to focus · Enter to send · Esc to blur</div>
   </div>
 </div>
 <div id="toast"></div>
@@ -1150,8 +1166,8 @@ function connectWS(token){
     let msg;try{msg=JSON.parse(e.data);}catch{return;}
     if(msg.type==='authFail'){toast('Multiplayer auth failed.');ws.close();return;}
     if(msg.type==='init'){mpOnline=true;for(const p of msg.players)addOtherPlayer(p.username,p.x,p.y,p.z,p.yaw);updateOnlinePanel();}
-    if(msg.type==='join'){addOtherPlayer(msg.username,msg.x,msg.y,msg.z,msg.yaw);toast(`${msg.username} joined!`);updateOnlinePanel();}
-    if(msg.type==='leave'){removeOtherPlayer(msg.username);toast(`${msg.username} left.`);updateOnlinePanel();}
+    if(msg.type==='join'){addOtherPlayer(msg.username,msg.x,msg.y,msg.z,msg.yaw);addSystemMessage(`⟶ ${msg.username} joined`);updateOnlinePanel();}
+    if(msg.type==='leave'){removeOtherPlayer(msg.username);addSystemMessage(`⟵ ${msg.username} left`);updateOnlinePanel();}
     if(msg.type==='move'){moveOtherPlayer(msg.username,msg.x,msg.y,msg.z,msg.yaw);}
     if(msg.type==='chat'){addChatMessage(msg.username,msg.message);}
   });
@@ -1165,49 +1181,72 @@ function broadcastPos(){
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 let chatOpen=false;
-const chatTimers=[];
+let chatPanelCollapsed=false;
+
+function chatTimestamp(){const d=new Date();return`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
 
 function addChatMessage(username,message,color='#7ec850'){
   const log=document.getElementById('chat-log');
   const div=document.createElement('div');div.className='chat-msg';
-  div.innerHTML=`<span class="chat-name" style="color:${color}">${username}:</span> ${message.replace(/</g,'&lt;')}`;
+  div.innerHTML=`<span class="chat-time">${chatTimestamp()}</span><span class="chat-name" style="color:${color}">${username}</span>: ${message.replace(/</g,'&lt;')}`;
   log.appendChild(div);
-  while(log.children.length>20)log.removeChild(log.firstChild);
-  // Auto-fade after 8s
-  const t=setTimeout(()=>{div.classList.add('fading');setTimeout(()=>div.remove(),1000);},8000);
-  chatTimers.push(t);
+  log.scrollTop=log.scrollHeight;
+}
+
+function addSystemMessage(text){
+  const log=document.getElementById('chat-log');
+  const div=document.createElement('div');div.className='chat-system';
+  div.textContent=text;
+  log.appendChild(div);
+  log.scrollTop=log.scrollHeight;
+}
+
+function toggleChatPanel(){
+  chatPanelCollapsed=!chatPanelCollapsed;
+  document.getElementById('chat-body').style.display=chatPanelCollapsed?'none':'flex';
+  document.getElementById('chat-toggle-btn').textContent=chatPanelCollapsed?'▸ show':'▾ hide';
 }
 
 function openChat(){
   if(!mpOnline){toast('Chat requires multiplayer login.');return;}
+  if(chatPanelCollapsed)toggleChatPanel();
   chatOpen=true;
   document.exitPointerLock();
-  document.getElementById('chat-input-wrap').style.display='block';
-  document.getElementById('chat-input').focus();
+  const input=document.getElementById('chat-input');
+  input.placeholder='Say something…';
+  input.focus();
 }
 
 function closeChat(){
   chatOpen=false;
-  document.getElementById('chat-input-wrap').style.display='none';
-  document.getElementById('chat-input').value='';
+  const input=document.getElementById('chat-input');
+  input.placeholder='Press T to chat…';
+  input.blur();
   renderer.domElement.requestPointerLock();
 }
 
 function sendChat(){
   const input=document.getElementById('chat-input');
   const msg=input.value.trim();
-  if(msg&&mpWS&&mpWS.readyState===WebSocket.OPEN){
-    mpWS.send(JSON.stringify({type:'chat',message:msg}));
-    addChatMessage(mpUsername,msg,'#ffd056');
+  if(msg){
+    if(mpWS&&mpWS.readyState===WebSocket.OPEN){
+      mpWS.send(JSON.stringify({type:'chat',message:msg}));
+      addChatMessage(mpUsername,msg,'#ffd056');
+    } else {
+      addSystemMessage('Not connected to server.');
+    }
   }
+  input.value='';
   closeChat();
 }
 
 document.getElementById('chat-input').addEventListener('keydown',e=>{
   e.stopPropagation();
   if(e.key==='Enter'){sendChat();}
-  if(e.key==='Escape'){closeChat();}
+  if(e.key==='Escape'){document.getElementById('chat-input').value='';closeChat();}
 });
+document.getElementById('chat-input').addEventListener('focus',()=>{chatOpen=true;});
+document.getElementById('chat-input').addEventListener('blur',()=>{chatOpen=false;});
 
 // ── Auth Screen ────────────────────────────────────────────────────────────────
 let authMode='login';
