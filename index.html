@@ -78,6 +78,25 @@ canvas { display:block; }
 /* Map */
 #map-ui { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:160;align-items:center;justify-content:center;flex-direction:column;gap:10px;font-family:'Courier New',monospace;color:white; }
 #map-canvas { border:2px solid #888;image-rendering:pixelated; }
+/* Auth */
+#auth-screen { position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.93);z-index:300;font-family:'Courier New',monospace;color:white; }
+#auth-screen h1 { font-size:52px;color:#7ec850;text-shadow:3px 3px 0 #2d5a15;letter-spacing:5px;margin-bottom:4px; }
+#auth-screen .sub { color:#555;font-size:12px;margin-bottom:24px; }
+.auth-panel { background:#1c1c1c;border:2px solid #444;padding:24px 32px;display:flex;flex-direction:column;gap:10px;min-width:300px; }
+.auth-panel h2 { font-size:14px;color:#f0c060;letter-spacing:2px;margin-bottom:4px; }
+.auth-input { background:#111;border:1px solid #555;color:white;font-family:'Courier New',monospace;font-size:13px;padding:8px 12px;outline:none; }
+.auth-input:focus { border-color:#7ec850; }
+.auth-btn { border:none;font-family:inherit;font-size:13px;padding:9px;cursor:pointer;letter-spacing:1px;margin-top:2px; }
+.auth-btn.primary { background:#4CAF50;border-bottom:3px solid #2a6b2a;color:white; }
+.auth-btn.secondary { background:#444;border-bottom:3px solid #222;color:#ccc; }
+.auth-btn.offline { background:#333;border:1px solid #444;color:#888;font-size:11px; }
+.auth-tabs { display:flex;gap:2px;margin-bottom:8px; }
+.auth-tab { flex:1;padding:6px;background:#111;border:1px solid #333;color:#666;cursor:pointer;font-family:inherit;font-size:11px;letter-spacing:1px; }
+.auth-tab.active { background:#222;border-color:#7ec850;color:#7ec850; }
+#auth-error { color:#f84;font-size:11px;min-height:16px; }
+#auth-status { color:#7ec850;font-size:11px; }
+/* Online players panel */
+#online-panel { position:fixed;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);border:1px solid #333;padding:4px 12px;font-family:'Courier New',monospace;font-size:11px;color:#aaa;pointer-events:none;display:none; }
 /* Chest */
 .chest-grid { display:grid;grid-template-columns:repeat(9,46px);gap:2px; }
 .chest-slot,.inv-slot { width:46px;height:46px;border:2px solid #555;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:2px;position:relative;user-select:none; }
@@ -90,6 +109,25 @@ canvas { display:block; }
 </style>
 </head>
 <body>
+<div id="auth-screen">
+  <h1>VOXELCRAFT</h1>
+  <div class="sub">Multiplayer Edition</div>
+  <div class="auth-panel">
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="authTab('login')">LOG IN</button>
+      <button class="auth-tab" onclick="authTab('register')">REGISTER</button>
+    </div>
+    <h2 id="auth-title">WELCOME BACK</h2>
+    <input class="auth-input" id="auth-user" placeholder="Username" autocomplete="username" maxlength="20">
+    <input class="auth-input" id="auth-pass" placeholder="Password" type="password" autocomplete="current-password">
+    <div id="auth-error"></div>
+    <button class="auth-btn primary" onclick="doAuth()">&#9654; LOG IN</button>
+    <div id="auth-status"></div>
+    <hr style="border-color:#333;margin:4px 0">
+    <button class="auth-btn offline" onclick="playOffline()">Play Offline (no multiplayer)</button>
+  </div>
+</div>
+
 <div id="menu">
   <h1>VOXELCRAFT</h1>
   <div class="tagline">Mine • Craft • Build • Survive</div>
@@ -197,6 +235,7 @@ canvas { display:block; }
   <div id="h-fly" style="color:#ffd056">[F] Fly: OFF</div>
 </div>
 <div id="hotbar"></div>
+<div id="online-panel"></div>
 <div id="toast"></div>
 <div id="minebar-wrap"><div id="minebar"></div></div>
 
@@ -962,6 +1001,8 @@ function loop(now){
   const dt=Math.min((now-lastT)/1000,.05);lastT=now;
   if(locked&&!anyUI())update(dt);
   autoSaveTimer+=dt;if(autoSaveTimer>60){autoSaveTimer=0;saveGame();}
+  posBroadcastTimer+=dt;if(posBroadcastTimer>.1){posBroadcastTimer=0;broadcastPos();}
+  lerpOtherPlayers(dt);
   if(meshDirty)buildMesh();
   renderer.render(scene,camera);
 }
@@ -1025,6 +1066,135 @@ function startGame(forceNew=false){
 }
 window.addEventListener('beforeunload',saveGame);
 let autoSaveTimer=0;
+
+// ── Multiplayer ────────────────────────────────────────────────────────────────
+const SERVER=(window.location.hostname==='localhost'||window.location.hostname==='')
+  ?'http://localhost:3001'
+  :'https://jump-world.onrender.com';
+const WS_SERVER=SERVER.replace('http','ws');
+
+let mpToken=null,mpUsername=null,mpWS=null,mpOnline=false;
+const otherPlayers=new Map(); // username → {mesh, nameSpr, pos, targetPos, yaw}
+let posBroadcastTimer=0;
+
+function makePlayerMesh(uname){
+  const g=new THREE.Group();
+  const bodyM=mMat(0x4080c0),headM=mMat(0xffcc88),legM=mMat(0x3060a0);
+  const body=new THREE.Mesh(new THREE.BoxGeometry(.52,.84,.30),bodyM);body.position.set(0,.78,0);g.add(body);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(.48,.48,.48),headM);head.position.set(0,1.44,0);g.add(head);
+  [[-.32,.74,0],[.32,.74,0]].forEach(([x,y,z])=>{const a=new THREE.Mesh(new THREE.BoxGeometry(.2,.72,.22),bodyM);a.position.set(x,y,z);g.add(a);});
+  [[-.14,.28,0],[.14,.28,0]].forEach(([x,y,z])=>{const l=new THREE.Mesh(new THREE.BoxGeometry(.22,.60,.24),legM);l.position.set(x,y,z);g.add(l);});
+  setShadow(g);
+  // Name label sprite
+  const cv=document.createElement('canvas');cv.width=256;cv.height=48;
+  const cx=cv.getContext('2d');cx.fillStyle='rgba(0,0,0,0.6)';cx.fillRect(0,8,256,32);
+  cx.font='bold 22px sans-serif';cx.textAlign='center';cx.fillStyle='#fff';cx.fillText(uname,128,30);
+  const tex=new THREE.CanvasTexture(cv);
+  const spr=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
+  spr.scale.set(1.6,.32,1);spr.position.set(0,2.1,0);g.add(spr);
+  return g;
+}
+
+function addOtherPlayer(username,x,y,z,yaw){
+  if(otherPlayers.has(username))return;
+  const mesh=makePlayerMesh(username);
+  mesh.position.set(x,y,z);mesh.rotation.y=yaw||0;
+  scene.add(mesh);
+  otherPlayers.set(username,{mesh,pos:new THREE.Vector3(x,y,z),targetPos:new THREE.Vector3(x,y,z),yaw:yaw||0});
+}
+function removeOtherPlayer(username){
+  const p=otherPlayers.get(username);if(!p)return;
+  scene.remove(p.mesh);otherPlayers.delete(username);
+}
+function moveOtherPlayer(username,x,y,z,yaw){
+  const p=otherPlayers.get(username);if(!p)return;
+  p.targetPos.set(x,y,z);p.yaw=yaw;
+}
+function lerpOtherPlayers(dt){
+  for(const[,p] of otherPlayers){
+    p.pos.lerp(p.targetPos,Math.min(1,dt*12));
+    p.mesh.position.copy(p.pos);
+    p.mesh.rotation.y+=(p.yaw-p.mesh.rotation.y)*Math.min(1,dt*10);
+  }
+}
+function updateOnlinePanel(){
+  const el=document.getElementById('online-panel');
+  if(!mpOnline){el.style.display='none';return;}
+  const names=[mpUsername,...otherPlayers.keys()];
+  el.style.display='block';
+  el.textContent=`🌐 Online (${names.length}): ${names.join(', ')}`;
+}
+
+function connectWS(token){
+  const ws=new WebSocket(WS_SERVER);
+  mpWS=ws;
+  ws.addEventListener('open',()=>{ws.send(JSON.stringify({type:'auth',token}));});
+  ws.addEventListener('message',e=>{
+    let msg;try{msg=JSON.parse(e.data);}catch{return;}
+    if(msg.type==='authFail'){toast('Multiplayer auth failed.');ws.close();return;}
+    if(msg.type==='init'){mpOnline=true;for(const p of msg.players)addOtherPlayer(p.username,p.x,p.y,p.z,p.yaw);updateOnlinePanel();}
+    if(msg.type==='join'){addOtherPlayer(msg.username,msg.x,msg.y,msg.z,msg.yaw);toast(`${msg.username} joined!`);updateOnlinePanel();}
+    if(msg.type==='leave'){removeOtherPlayer(msg.username);toast(`${msg.username} left.`);updateOnlinePanel();}
+    if(msg.type==='move'){moveOtherPlayer(msg.username,msg.x,msg.y,msg.z,msg.yaw);}
+  });
+  ws.addEventListener('close',()=>{mpOnline=false;for(const u of otherPlayers.keys())removeOtherPlayer(u);updateOnlinePanel();});
+}
+
+function broadcastPos(){
+  if(!mpWS||mpWS.readyState!==WebSocket.OPEN)return;
+  mpWS.send(JSON.stringify({type:'move',x:+plr.pos.x.toFixed(2),y:+plr.pos.y.toFixed(2),z:+plr.pos.z.toFixed(2),yaw:+plr.yaw.toFixed(3)}));
+}
+
+// ── Auth Screen ────────────────────────────────────────────────────────────────
+let authMode='login';
+function authTab(mode){
+  authMode=mode;
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',(i===0&&mode==='login')||(i===1&&mode==='register')));
+  document.getElementById('auth-title').textContent=mode==='login'?'WELCOME BACK':'CREATE ACCOUNT';
+  document.getElementById('auth-error').textContent='';
+  document.getElementById('auth-status').textContent='';
+  const btn=document.querySelector('.auth-btn.primary');btn.textContent=mode==='login'?'▶ LOG IN':'▶ REGISTER';
+}
+
+async function doAuth(){
+  const user=document.getElementById('auth-user').value.trim();
+  const pass=document.getElementById('auth-pass').value;
+  const errEl=document.getElementById('auth-error');
+  const statusEl=document.getElementById('auth-status');
+  errEl.textContent='';statusEl.textContent='';
+  if(!user||!pass){errEl.textContent='Enter username and password.';return;}
+  statusEl.textContent='Connecting…';
+  try{
+    const res=await fetch(`${SERVER}/${authMode}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})});
+    const data=await res.json();
+    if(!res.ok){errEl.textContent=data.error||'Error';statusEl.textContent='';return;}
+    localStorage.setItem('mp_token',data.token);
+    localStorage.setItem('mp_username',data.username);
+    mpToken=data.token;mpUsername=data.username;
+    statusEl.textContent=`Logged in as ${data.username}!`;
+    setTimeout(()=>showMenu(true),400);
+  }catch{errEl.textContent='Cannot reach server. Play offline instead.';statusEl.textContent='';}
+}
+
+document.getElementById('auth-user').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('auth-pass').focus();});
+document.getElementById('auth-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doAuth();});
+
+function playOffline(){mpToken=null;mpUsername=null;showMenu(false);}
+
+function showMenu(online){
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('menu').style.display='flex';
+  if(online&&mpToken)connectWS(mpToken);
+}
+
+// On load: skip auth screen if already have a token
+(function initAuth(){
+  const tok=localStorage.getItem('mp_token');
+  const uname=localStorage.getItem('mp_username');
+  if(tok&&uname){mpToken=tok;mpUsername=uname;showMenu(true);}
+  // else auth screen stays visible
+})();
+
 requestAnimationFrame(loop);
 </script>
 </body>
