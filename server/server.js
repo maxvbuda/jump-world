@@ -111,6 +111,12 @@ wss.on('connection', (ws) => {
       p.x = msg.x; p.y = msg.y; p.z = msg.z; p.yaw = msg.yaw;
       broadcast({ type: 'move', username, x: msg.x, y: msg.y, z: msg.z, yaw: msg.yaw }, ws);
     }
+
+    if (msg.type === 'chat') {
+      const text = String(msg.message || '').trim().slice(0, 200);
+      if (!text) return;
+      broadcast({ type: 'chat', username, message: text }, null);
+    }
   });
 
   ws.on('close', () => {

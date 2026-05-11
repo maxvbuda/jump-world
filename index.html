@@ -97,6 +97,15 @@ canvas { display:block; }
 #auth-status { color:#7ec850;font-size:11px; }
 /* Online players panel */
 #online-panel { position:fixed;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);border:1px solid #333;padding:4px 12px;font-family:'Courier New',monospace;font-size:11px;color:#aaa;pointer-events:none;display:none; }
+/* Chat */
+#chat-wrap { position:fixed;bottom:90px;left:10px;width:340px;display:flex;flex-direction:column;gap:3px;pointer-events:none;z-index:60; }
+#chat-log { display:flex;flex-direction:column;gap:2px;max-height:180px;overflow:hidden;justify-content:flex-end; }
+.chat-msg { font-family:'Courier New',monospace;font-size:12px;color:#fff;background:rgba(0,0,0,0.5);padding:2px 7px;border-radius:2px;word-break:break-word;transition:opacity 1s;line-height:1.5; }
+.chat-msg .chat-name { font-weight:bold; }
+.chat-msg.fading { opacity:0; }
+#chat-input-wrap { display:none;pointer-events:all; }
+#chat-input { width:100%;background:rgba(0,0,0,0.75);border:1px solid #7ec850;color:white;font-family:'Courier New',monospace;font-size:13px;padding:6px 10px;outline:none;box-sizing:border-box; }
+#chat-hint { font-family:'Courier New',monospace;font-size:10px;color:#555;padding:2px 4px; }
 /* Chest */
 .chest-grid { display:grid;grid-template-columns:repeat(9,46px);gap:2px; }
 .chest-slot,.inv-slot { width:46px;height:46px;border:2px solid #555;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:2px;position:relative;user-select:none; }
@@ -236,6 +245,13 @@ canvas { display:block; }
 </div>
 <div id="hotbar"></div>
 <div id="online-panel"></div>
+<div id="chat-wrap">
+  <div id="chat-log"></div>
+  <div id="chat-input-wrap">
+    <input id="chat-input" maxlength="200" placeholder="Say something…">
+    <div id="chat-hint">Enter to send · Esc to close</div>
+  </div>
+</div>
 <div id="toast"></div>
 <div id="minebar-wrap"><div id="minebar"></div></div>
 
@@ -885,7 +901,7 @@ function spawnPlayer(){const sx=WW/2|0,sz=WD/2|0;let sy=WH-1;while(sy>0&&getB(sx
 // ── Input ─────────────────────────────────────────────────────────────────────
 const keys={};let locked=false,started=false,lmbHeld=false;
 let mineTarget=null,mineProgress=0,cantMineShown=false;
-function anyUI(){return craftOpen||chestOpen||shopOpen||mapOpen;}
+function anyUI(){return craftOpen||chestOpen||shopOpen||mapOpen||chatOpen;}
 
 document.addEventListener('keydown',e=>{
   keys[e.code]=true;
@@ -893,6 +909,7 @@ document.addEventListener('keydown',e=>{
   if(e.code==='KeyE'){openCrafting();return;}
   if(e.code==='KeyR'){eatMeat();return;}
   if(e.code==='KeyM'){toggleMap();return;}
+  if(e.code==='KeyT'){openChat();return;}
   if(e.code==='KeyF'){plr.fly=!plr.fly;plr.vel.y=0;document.getElementById('h-fly').textContent=`[F] Fly: ${plr.fly?'ON':'OFF'}`;}
   const n=parseInt(e.key);if(n>=1&&n<=9){selSlot=n-1;renderHotbar();}
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
@@ -1136,6 +1153,7 @@ function connectWS(token){
     if(msg.type==='join'){addOtherPlayer(msg.username,msg.x,msg.y,msg.z,msg.yaw);toast(`${msg.username} joined!`);updateOnlinePanel();}
     if(msg.type==='leave'){removeOtherPlayer(msg.username);toast(`${msg.username} left.`);updateOnlinePanel();}
     if(msg.type==='move'){moveOtherPlayer(msg.username,msg.x,msg.y,msg.z,msg.yaw);}
+    if(msg.type==='chat'){addChatMessage(msg.username,msg.message);}
   });
   ws.addEventListener('close',()=>{mpOnline=false;for(const u of otherPlayers.keys())removeOtherPlayer(u);updateOnlinePanel();});
 }
@@ -1144,6 +1162,52 @@ function broadcastPos(){
   if(!mpWS||mpWS.readyState!==WebSocket.OPEN)return;
   mpWS.send(JSON.stringify({type:'move',x:+plr.pos.x.toFixed(2),y:+plr.pos.y.toFixed(2),z:+plr.pos.z.toFixed(2),yaw:+plr.yaw.toFixed(3)}));
 }
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+let chatOpen=false;
+const chatTimers=[];
+
+function addChatMessage(username,message,color='#7ec850'){
+  const log=document.getElementById('chat-log');
+  const div=document.createElement('div');div.className='chat-msg';
+  div.innerHTML=`<span class="chat-name" style="color:${color}">${username}:</span> ${message.replace(/</g,'&lt;')}`;
+  log.appendChild(div);
+  while(log.children.length>20)log.removeChild(log.firstChild);
+  // Auto-fade after 8s
+  const t=setTimeout(()=>{div.classList.add('fading');setTimeout(()=>div.remove(),1000);},8000);
+  chatTimers.push(t);
+}
+
+function openChat(){
+  if(!mpOnline){toast('Chat requires multiplayer login.');return;}
+  chatOpen=true;
+  document.exitPointerLock();
+  document.getElementById('chat-input-wrap').style.display='block';
+  document.getElementById('chat-input').focus();
+}
+
+function closeChat(){
+  chatOpen=false;
+  document.getElementById('chat-input-wrap').style.display='none';
+  document.getElementById('chat-input').value='';
+  renderer.domElement.requestPointerLock();
+}
+
+function sendChat(){
+  const input=document.getElementById('chat-input');
+  const msg=input.value.trim();
+  if(msg&&mpWS&&mpWS.readyState===WebSocket.OPEN){
+    mpWS.send(JSON.stringify({type:'chat',message:msg}));
+    addChatMessage(mpUsername,msg,'#ffd056');
+  }
+  closeChat();
+}
+
+document.getElementById('chat-input').addEventListener('keydown',e=>{
+  e.stopPropagation();
+  if(e.key==='Enter'){sendChat();}
+  if(e.key==='Escape'){closeChat();}
+});
 
 // ── Auth Screen ────────────────────────────────────────────────────────────────
 let authMode='login';
