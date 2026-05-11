@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
-const GAME_FILE = path.join(__dirname, '..', 'index.html');
+const GAME_FILE = path.join(__dirname, 'index.html');
 
 const app = express();
 const server = http.createServer(app);
