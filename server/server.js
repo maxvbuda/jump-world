@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+const GAME_FILE = path.join(__dirname, '..', 'index.html');
 
 const app = express();
 const server = http.createServer(app);
@@ -16,6 +17,7 @@ const USERS_FILE = path.join(__dirname, 'users.json');
 const WORLD_SEED = 42; // fixed seed so all clients get same terrain
 
 app.use(express.json());
+app.get('/', (req, res) => res.sendFile(GAME_FILE));
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
