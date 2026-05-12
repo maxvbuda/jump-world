@@ -97,6 +97,23 @@ canvas { display:block; }
 #auth-status { color:#7ec850;font-size:11px; }
 /* Online players panel */
 #online-panel { position:fixed;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);border:1px solid #333;padding:4px 12px;font-family:'Courier New',monospace;font-size:11px;color:#aaa;pointer-events:none;display:none; }
+/* Player screen */
+.equip-grid { display:flex;gap:10px;margin-bottom:14px; }
+.equip-slot { width:76px;height:76px;border:2px solid #555;background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative;cursor:pointer;user-select:none; }
+.equip-slot:hover { border-color:#aaa; }
+.equip-slot.filled { border-color:#7ec850; }
+.equip-label { font-size:8px;color:#555;position:absolute;top:3px;left:0;right:0;text-align:center;letter-spacing:1px; }
+.equip-icon { width:38px;height:38px; }
+.equip-name { font-size:7px;color:#aaa;text-align:center; }
+.equip-dur { font-size:7px;color:#888; }
+.item-inv-grid { display:flex;flex-wrap:wrap;gap:4px;max-width:440px;max-height:200px;overflow-y:auto; }
+.item-slot { width:66px;height:66px;border:1px solid #444;background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;position:relative;user-select:none; }
+.item-slot:hover { border-color:#aaa; }
+.item-slot.equippable { border-color:#555; }
+.item-icon { width:32px;height:32px; }
+.item-lbl { font-size:7px;color:#aaa;text-align:center; }
+.item-cnt { position:absolute;bottom:2px;right:4px;font-size:9px;color:#ffd056;font-weight:bold; }
+.item-action { font-size:8px;color:#7ec850;margin-top:1px; }
 /* Chat panel */
 #chat-panel { position:fixed;right:12px;bottom:80px;width:320px;display:flex;flex-direction:column;background:rgba(0,0,0,0.78);border:1px solid #333;font-family:'Courier New',monospace;z-index:60;pointer-events:all; }
 #chat-header { display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #333;cursor:pointer;user-select:none; }
@@ -152,7 +169,7 @@ canvas { display:block; }
   <div class="ctrl-box">
     <b>WASD</b> Move &nbsp;|&nbsp; <b>Space</b> Jump &nbsp;|&nbsp; <b>Shift</b> Sprint &nbsp;|&nbsp; <b>F</b> Fly<br>
     <b>Hold LClick</b> Mine &nbsp;|&nbsp; <b>Click mob</b> Attack &nbsp;|&nbsp; <b>RClick</b> Place/Open<br>
-    <b>E</b> Crafting &nbsp;|&nbsp; <b>R</b> Eat meat &nbsp;|&nbsp; <b>M</b> Map &nbsp;|&nbsp; <b>1–9/Scroll</b> Select
+    <b>E</b> Crafting &nbsp;|&nbsp; <b>P</b> Player &nbsp;|&nbsp; <b>R</b> Eat &nbsp;|&nbsp; <b>M</b> Map &nbsp;|&nbsp; <b>T</b> Chat &nbsp;|&nbsp; <b>1–9/Scroll</b> Select block
   </div>
   <div id="menu-btns" style="display:flex;flex-direction:column;align-items:center;gap:10px;"></div>
   <script>
@@ -220,6 +237,22 @@ canvas { display:block; }
   <canvas id="map-canvas" width="560" height="560"></canvas>
   <div id="map-legend" style="font-size:11px;color:#aaa;display:flex;gap:20px;"></div>
   <div style="font-size:11px;color:#555;">Press M to close</div>
+</div>
+
+<!-- Player screen -->
+<div id="player-ui" class="game-ui">
+  <div class="panel" style="min-width:480px;max-width:95vw;">
+    <h2>&#128100; PLAYER</h2>
+    <div id="player-stats" style="font-size:11px;color:#888;margin-bottom:14px;line-height:2;"></div>
+    <div style="font-size:10px;color:#f0c060;letter-spacing:1px;margin-bottom:6px;">EQUIPMENT — click to unequip</div>
+    <div class="equip-grid" id="equip-slots"></div>
+    <div style="border-top:1px solid #333;margin:10px 0 8px;"></div>
+    <div style="font-size:10px;color:#f0c060;letter-spacing:1px;margin-bottom:6px;">ITEMS — click to equip</div>
+    <div class="item-inv-grid" id="item-inv"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+      <button class="panel-btn" onclick="closePlayer()">Close [P]</button>
+    </div>
+  </div>
 </div>
 
 <!-- Chest -->
@@ -298,11 +331,12 @@ const BCOL={
 const BNAME={[B.GRASS]:'Grass',[B.DIRT]:'Dirt',[B.STONE]:'Stone',[B.SAND]:'Sand',[B.WOOD]:'Wood',[B.LEAVES]:'Leaves',[B.COBBLE]:'Cobble',[B.CRAFTING]:'Craft Table',[B.PLANKS]:'Planks',[B.BRICK]:'Brick',[B.GLASS]:'Glass',[B.CHEST]:'Chest',[B.FENCE]:'Fence',[B.DIAMOND_ORE]:'Diamond',[B.NETHERITE_ORE]:'Netherite',[B.SHOP]:'Diamond Shop'};
 
 // ── Item IDs (≥100, non-placeable) ────────────────────────────────────────────
-const IT={MEAT:100,WOOD_PICK:101,STONE_PICK:102,DIAMOND_PICK:103,WOOD_ARMOR:104,STONE_ARMOR:105,DIAMOND_ARMOR:106,NETHERITE_ARMOR:107,AIRTAG:109,PORK:110,LAMB_MEAT:111};
-const INAME={[IT.MEAT]:'Raw Mutton',[IT.PORK]:'Raw Pork',[IT.LAMB_MEAT]:'Lamb Meat',[IT.WOOD_PICK]:'Wood Pick',[IT.STONE_PICK]:'Stone Pick',[IT.DIAMOND_PICK]:'Diamond Pick',[IT.WOOD_ARMOR]:'Wood Armor',[IT.STONE_ARMOR]:'Stone Armor',[IT.DIAMOND_ARMOR]:'Diamond Armor',[IT.NETHERITE_ARMOR]:'Netherite Armor',[IT.AIRTAG]:'Airtag'};
-const ICOLOR={[IT.MEAT]:[195,75,55],[IT.PORK]:[220,100,70],[IT.LAMB_MEAT]:[235,160,120],[IT.WOOD_PICK]:[160,110,55],[IT.STONE_PICK]:[130,130,130],[IT.DIAMOND_PICK]:[80,210,230],[IT.WOOD_ARMOR]:[170,120,60],[IT.STONE_ARMOR]:[110,110,110],[IT.DIAMOND_ARMOR]:[90,220,235],[IT.NETHERITE_ARMOR]:[80,60,95],[IT.AIRTAG]:[255,80,80]};
-// Hunger restored per meat type
+const IT={MEAT:100,WOOD_PICK:101,STONE_PICK:102,DIAMOND_PICK:103,WOOD_ARMOR:104,STONE_ARMOR:105,DIAMOND_ARMOR:106,NETHERITE_ARMOR:107,AIRTAG:109,PORK:110,LAMB_MEAT:111,WOOD_SWORD:112,STONE_SWORD:113,DIAMOND_SWORD:114,NETHERITE_SWORD:115};
+const INAME={[IT.MEAT]:'Raw Mutton',[IT.PORK]:'Raw Pork',[IT.LAMB_MEAT]:'Lamb Meat',[IT.WOOD_PICK]:'Wood Pick',[IT.STONE_PICK]:'Stone Pick',[IT.DIAMOND_PICK]:'Diamond Pick',[IT.WOOD_ARMOR]:'Wood Armor',[IT.STONE_ARMOR]:'Stone Armor',[IT.DIAMOND_ARMOR]:'Diamond Armor',[IT.NETHERITE_ARMOR]:'Netherite Armor',[IT.AIRTAG]:'Airtag',[IT.WOOD_SWORD]:'Wood Sword',[IT.STONE_SWORD]:'Stone Sword',[IT.DIAMOND_SWORD]:'Diamond Sword',[IT.NETHERITE_SWORD]:'Netherite Sword'};
+const ICOLOR={[IT.MEAT]:[195,75,55],[IT.PORK]:[220,100,70],[IT.LAMB_MEAT]:[235,160,120],[IT.WOOD_PICK]:[160,110,55],[IT.STONE_PICK]:[130,130,130],[IT.DIAMOND_PICK]:[80,210,230],[IT.WOOD_ARMOR]:[170,120,60],[IT.STONE_ARMOR]:[110,110,110],[IT.DIAMOND_ARMOR]:[90,220,235],[IT.NETHERITE_ARMOR]:[80,60,95],[IT.AIRTAG]:[255,80,80],[IT.WOOD_SWORD]:[180,130,65],[IT.STONE_SWORD]:[140,140,140],[IT.DIAMOND_SWORD]:[80,220,240],[IT.NETHERITE_SWORD]:[90,65,110]};
 const MEAT_HUNGER={[IT.PORK]:3,[IT.MEAT]:4,[IT.LAMB_MEAT]:6};
+const SWORD_DMG={[IT.WOOD_SWORD]:6,[IT.STONE_SWORD]:8,[IT.DIAMOND_SWORD]:12,[IT.NETHERITE_SWORD]:16};
+const SWORD_DUR={[IT.WOOD_SWORD]:80,[IT.STONE_SWORD]:160,[IT.DIAMOND_SWORD]:1500,[IT.NETHERITE_SWORD]:3000};
 
 function isItem(t){return t>=100;}
 function getName(t){return isItem(t)?INAME[t]:BNAME[t];}
@@ -328,6 +362,12 @@ const MINE_TIME_TABLE={
 const ARMOR_DEF={[IT.WOOD_ARMOR]:1,[IT.STONE_ARMOR]:2,[IT.DIAMOND_ARMOR]:4,[IT.NETHERITE_ARMOR]:6};
 const TOOL_DUR={[IT.WOOD_PICK]:60,[IT.STONE_PICK]:130,[IT.DIAMOND_PICK]:1500};
 const TOOL_TIER={[IT.WOOD_PICK]:1,[IT.STONE_PICK]:2,[IT.DIAMOND_PICK]:3};
+// Equipment slots (separate from hotbar inventory)
+const equipped={armor:null,pick:null,sword:null};
+function equipSlotFor(type){if(ARMOR_DEF[type])return'armor';if(TOOL_TIER[type])return'pick';if(SWORD_DMG[type])return'sword';return null;}
+function isEquippable(type){return!!equipSlotFor(type);}
+function equipItem(type){const slot=equipSlotFor(type);if(!slot)return;if(equipped[slot])addItem(equipped[slot],1);useItem(type,1);equipped[slot]=type;renderPlayerUI();updateArmorBar();}
+function unequipSlot(slot){if(!equipped[slot])return;addItem(equipped[slot],1);equipped[slot]=null;renderPlayerUI();updateArmorBar();}
 
 // ── World ─────────────────────────────────────────────────────────────────────
 const WW=56,WH=32,WD=56;
@@ -484,11 +524,12 @@ const inv={};
 let selSlot=0;
 const toolDurability={};
 function invItems(){return Object.entries(inv).filter(([,c])=>c>0).map(([t,c])=>({type:+t,count:c}));}
+function hotbarItems(){return Object.entries(inv).filter(([t,c])=>c>0&&!isItem(+t)).map(([t,c])=>({type:+t,count:c}));}
 function updateArmorBar(){const arm=getBestArmor();document.getElementById('armor-bar').textContent=arm?`🛡 ${arm}`:''}
 function addItem(t,n=1){inv[t]=(inv[t]||0)+n;renderHotbar();updateArmorBar();}
 function useItem(t,n=1){if((inv[t]||0)<n)return false;inv[t]-=n;if(!inv[t])delete inv[t];const it=invItems();if(selSlot>=it.length)selSlot=Math.max(0,it.length-1);renderHotbar();updateArmorBar();return true;}
-function getHeldType(){const it=invItems();if(!it.length)return null;return it[Math.min(selSlot,it.length-1)].type;}
-function getHeldTier(){const t=getHeldType();return TOOL_TIER[t]||0;}
+function getHeldType(){const it=hotbarItems();if(!it.length)return null;return it[Math.min(selSlot,it.length-1)].type;}
+function getHeldTier(){return TOOL_TIER[equipped.pick]||0;}
 function canMine(bt){const req=MINE_REQ[bt]||0;return getHeldTier()>=req;}
 function getMineTime(bt){
   const tier=getHeldTier();const def=MINE_TIME_TABLE[bt];
@@ -498,13 +539,20 @@ function getMineTime(bt){
   return Infinity;
 }
 function useDurability(){
-  const t=getHeldType();if(!TOOL_TIER[t])return;
+  const t=equipped.pick;if(!t||!TOOL_TIER[t])return;
   if(!toolDurability[t])toolDurability[t]=TOOL_DUR[t]||60;
   toolDurability[t]--;
-  if(toolDurability[t]<=0){delete toolDurability[t];useItem(t,1);toast(`${getName(t)} broke!`);}
+  if(toolDurability[t]<=0){delete toolDurability[t];equipped.pick=null;toast(`${getName(t)} broke!`);renderPlayerUI();}
 }
-function getArmorDef(){let best=0;for(const[t,def]of Object.entries(ARMOR_DEF))if((inv[+t]||0)>0&&def>best)best=def;return best;}
-function getBestArmor(){for(const[t,def]of Object.entries(ARMOR_DEF))if((inv[+t]||0)>0&&def===getArmorDef())return getName(+t);return null;}
+function useSwordDurability(){
+  const t=equipped.sword;if(!t)return;
+  if(!toolDurability[t])toolDurability[t]=SWORD_DUR[t]||80;
+  toolDurability[t]--;
+  if(toolDurability[t]<=0){delete toolDurability[t];equipped.sword=null;toast(`${getName(t)} broke!`);renderPlayerUI();}
+}
+function getArmorDef(){return equipped.armor?ARMOR_DEF[equipped.armor]||0:0;}
+function getBestArmor(){return equipped.armor?getName(equipped.armor):null;}
+function getAttackDmg(){return equipped.sword?SWORD_DMG[equipped.sword]:5;}
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 let toastT=null;
@@ -530,7 +578,7 @@ function tickHunger(dt){
   if(hunger===0){starveTimer+=dt;if(starveTimer>5){starveTimer=0;plrHP=Math.max(0,plrHP-1);updateHearts();flashOrange();if(plrHP<=0)gameOver();}}
   else starveTimer=0;
 }
-function eatMeat(){const t=getHeldType();const restore=MEAT_HUNGER[t];if(restore===undefined){toast('Hold meat to eat (R)');return;}if(hunger>=maxHunger){toast('Not hungry!');return;}if(!useItem(t))return;hunger=Math.min(maxHunger,hunger+restore);updateHunger();toast(`Ate ${getName(t)} (+${restore} hunger)`);}
+function eatMeat(){if(hunger>=maxHunger){toast('Not hungry!');return;}const meats=Object.keys(MEAT_HUNGER).map(Number).filter(t=>(inv[t]||0)>0);if(!meats.length){toast('No meat in inventory (R)');return;}const t=meats[0];const restore=MEAT_HUNGER[t];if(!useItem(t))return;hunger=Math.min(maxHunger,hunger+restore);updateHunger();toast(`Ate ${getName(t)} (+${restore} hunger)`);}
 function gameOver(){document.exitPointerLock();document.getElementById('gameover').style.display='flex';}
 function respawn(){document.getElementById('gameover').style.display='none';plrHP=plrMaxHP;hunger=maxHunger;hungerTimer=0;starveTimer=0;updateHearts();updateHunger();spawnPlayer();for(const m of[...mobs])m.remove();mobs.length=0;spawnMobs();renderer.domElement.requestPointerLock();}
 
@@ -571,6 +619,11 @@ const RECIPES=[
   {desc:'Diamond Shop (3 Diamond top + 3 Planks)',pattern:[[B.DIAMOND_ORE,B.DIAMOND_ORE,B.DIAMOND_ORE],[B.PLANKS,B.PLANKS,B.PLANKS]], output:B.SHOP, count:1},
   // Airtag
   {desc:'Airtag ×3 (1 Diamond + 2 Stone)',shapeless:true,ingredients:{[B.DIAMOND_ORE]:1,[B.STONE]:2},output:IT.AIRTAG,count:3},
+  // Swords (2 material + 1 plank handle)
+  {desc:'Wood Sword (2 Planks + handle)',  pattern:[[B.PLANKS],[B.PLANKS],[B.WOOD]],   output:IT.WOOD_SWORD,     count:1},
+  {desc:'Stone Sword (2 Cobble + handle)', pattern:[[B.COBBLE],[B.COBBLE],[B.PLANKS]], output:IT.STONE_SWORD,    count:1},
+  {desc:'Diamond Sword',                   pattern:[[B.DIAMOND_ORE],[B.DIAMOND_ORE],[B.PLANKS]], output:IT.DIAMOND_SWORD, count:1},
+  {desc:'Netherite Sword',                 pattern:[[B.NETHERITE_ORE],[B.NETHERITE_ORE],[B.PLANKS]], output:IT.NETHERITE_SWORD,count:1},
 ];
 
 function matchRecipe(){
@@ -673,6 +726,46 @@ function renderRecipeList(){
 }
 function openCrafting(){craftOpen=true;document.exitPointerLock();document.getElementById('craft-ui').style.display='flex';renderCraftGrid();renderRecipeList();}
 function closeCrafting(){craftOpen=false;document.getElementById('craft-ui').style.display='none';renderer.domElement.requestPointerLock();}
+
+// ── Player Screen ─────────────────────────────────────────────────────────────
+let playerOpen=false;
+function openPlayer(){playerOpen=true;document.exitPointerLock();document.getElementById('player-ui').style.display='flex';renderPlayerUI();}
+function closePlayer(){playerOpen=false;document.getElementById('player-ui').style.display='none';renderer.domElement.requestPointerLock();}
+function renderPlayerUI(){
+  // Stats
+  const stats=document.getElementById('player-stats');
+  stats.innerHTML=`HP: <span style="color:#f44">${plrHP}/${plrMaxHP}</span> &nbsp; Hunger: <span style="color:#fa0">${hunger}/${maxHunger}</span> &nbsp; Airtags placed: <span style="color:#f44">${airtags.length}</span>`;
+  // Equipment slots
+  const slots=document.getElementById('equip-slots');slots.innerHTML='';
+  [{key:'sword',label:'SWORD',empty:'No Sword'},{key:'pick',label:'PICKAXE',empty:'No Pick'},{key:'armor',label:'ARMOR',empty:'No Armor'}].forEach(({key,label,empty})=>{
+    const type=equipped[key];
+    const div=document.createElement('div');div.className='equip-slot'+(type?' filled':'');
+    if(type){
+      const[r,g,b]=getColor(type,2);
+      const maxD=(SWORD_DUR[type]||TOOL_DUR[type]||0);
+      const durTxt=maxD?`${Math.round((toolDurability[type]??maxD)/maxD*100)}%`:'';
+      div.innerHTML=`<div class="equip-label">${label}</div><div class="equip-icon" style="background:rgb(${r},${g},${b});border:1px solid rgba(255,255,255,.15)"></div><div class="equip-name">${getName(type)}</div><div class="equip-dur">${durTxt}</div>`;
+      div.onclick=()=>unequipSlot(key);
+    }else{
+      div.innerHTML=`<div class="equip-label">${label}</div><div style="color:#333;font-size:11px">${empty}</div>`;
+    }
+    slots.appendChild(div);
+  });
+  // Item inventory (items only)
+  const grid=document.getElementById('item-inv');grid.innerHTML='';
+  const items=invItems().filter(({type})=>isItem(type));
+  if(!items.length){grid.innerHTML='<div style="color:#444;font-size:12px;padding:8px">No items</div>';return;}
+  items.forEach(({type,count})=>{
+    const[r,g,b]=getColor(type,2);
+    const div=document.createElement('div');
+    const canEquip=isEquippable(type);
+    div.className='item-slot'+(canEquip?' equippable':'');
+    const meat=MEAT_HUNGER[type];
+    div.innerHTML=`<div class="item-icon" style="background:rgb(${r},${g},${b});border:1px solid rgba(255,255,255,.1)"></div><div class="item-lbl">${getName(type)}</div>${canEquip?'<div class="item-action">equip</div>':meat?`<div class="item-action" style="color:#fa0">eat (R)</div>`:''}  <div class="item-cnt">×${count}</div>`;
+    if(canEquip)div.onclick=()=>equipItem(type);
+    grid.appendChild(div);
+  });
+}
 
 // ── Chest ─────────────────────────────────────────────────────────────────────
 const chestData={};let chestOpen=false,openChestPos=null;
@@ -917,15 +1010,16 @@ function spawnPlayer(){const sx=WW/2|0,sz=WD/2|0;let sy=WH-1;while(sy>0&&getB(sx
 // ── Input ─────────────────────────────────────────────────────────────────────
 const keys={};let locked=false,started=false,lmbHeld=false;
 let mineTarget=null,mineProgress=0,cantMineShown=false;
-function anyUI(){return craftOpen||chestOpen||shopOpen||mapOpen||chatOpen;}
+function anyUI(){return craftOpen||chestOpen||shopOpen||mapOpen||chatOpen||playerOpen;}
 
 document.addEventListener('keydown',e=>{
   keys[e.code]=true;
-  if(anyUI()){if(e.code==='KeyE'||e.code==='Escape'||e.code==='KeyM'){if(mapOpen)toggleMap();else if(craftOpen)closeCrafting();else if(shopOpen)closeShop();else closeChest();}return;}
+  if(anyUI()){if(e.code==='KeyE'||e.code==='Escape'||e.code==='KeyM'||e.code==='KeyP'){if(mapOpen)toggleMap();else if(craftOpen)closeCrafting();else if(shopOpen)closeShop();else if(playerOpen)closePlayer();else closeChest();}return;}
   if(e.code==='KeyE'){openCrafting();return;}
   if(e.code==='KeyR'){eatMeat();return;}
   if(e.code==='KeyM'){toggleMap();return;}
   if(e.code==='KeyT'){openChat();return;}
+  if(e.code==='KeyP'){openPlayer();return;}
   if(e.code==='KeyF'){plr.fly=!plr.fly;plr.vel.y=0;document.getElementById('h-fly').textContent=`[F] Fly: ${plr.fly?'ON':'OFF'}`;}
   const n=parseInt(e.key);if(n>=1&&n<=9){selSlot=n-1;renderHotbar();}
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
@@ -956,27 +1050,29 @@ renderer.domElement.addEventListener('mousedown',e=>{
 });
 renderer.domElement.addEventListener('mouseup',e=>{if(e.button===0){lmbHeld=false;mineTarget=null;mineProgress=0;cantMineShown=false;document.getElementById('minebar-wrap').style.display='none';}});
 renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
-renderer.domElement.addEventListener('wheel',e=>{e.preventDefault();const it=invItems();if(!it.length)return;selSlot=(selSlot+(e.deltaY>0?1:-1)+it.length)%it.length;renderHotbar();},{passive:false});
+renderer.domElement.addEventListener('wheel',e=>{e.preventDefault();const it=hotbarItems();if(!it.length)return;selSlot=(selSlot+(e.deltaY>0?1:-1)+it.length)%it.length;renderHotbar();},{passive:false});
 function resume(){if(!anyUI())renderer.domElement.requestPointerLock();}
 window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 
 // ── Hotbar ────────────────────────────────────────────────────────────────────
 function renderHotbar(){
-  const el=document.getElementById('hotbar');el.innerHTML='';const items=invItems();
+  const el=document.getElementById('hotbar');el.innerHTML='';const items=hotbarItems();
   if(!items.length){el.innerHTML='<div class="hslot sel"><div class="hempty">empty</div></div>';document.getElementById('h-blk').textContent='Break blocks to collect!';return;}
   items.forEach(({type,count},i)=>{const[r,g,bl]=getColor(type,2);const sl=document.createElement('div');sl.className='hslot'+(i===Math.min(selSlot,items.length-1)?' sel':'');sl.innerHTML=`<div class="hcol" style="background:rgb(${r},${g},${bl})"></div><div class="hlbl">${getName(type)}</div><div class="hcount">${count}</div>`;el.appendChild(sl);});
   const si=Math.min(selSlot,items.length-1);const{type}=items[si];
-  let blkText=`Selected: ${getName(type)} ×${items[si].count}`;
-  document.getElementById('h-blk').textContent=blkText;
-  // Tool durability
+  document.getElementById('h-blk').textContent=`Selected: ${getName(type)} ×${items[si].count}`;
+  // Equipment status in HUD
   const toolEl=document.getElementById('h-tool');
-  if(TOOL_TIER[type]){const maxD=TOOL_DUR[type]||60;const curD=toolDurability[type]??maxD;const pct=Math.round(curD/maxD*100);toolEl.textContent=`Durability: ${pct}% (${curD}/${maxD})`;}else toolEl.textContent='';
+  const parts=[];
+  if(equipped.sword){const maxD=SWORD_DUR[equipped.sword]||80;const curD=toolDurability[equipped.sword]??maxD;parts.push(`⚔ ${getName(equipped.sword)} ${Math.round(curD/maxD*100)}%`);}
+  if(equipped.pick){const maxD=TOOL_DUR[equipped.pick]||60;const curD=toolDurability[equipped.pick]??maxD;parts.push(`⛏ ${getName(equipped.pick)} ${Math.round(curD/maxD*100)}%`);}
+  toolEl.textContent=parts.join('  ');
 }
 
 // ── Raycast ───────────────────────────────────────────────────────────────────
 const _rD=new THREE.Vector3(),_rO=new THREE.Vector3(),_rE=new THREE.Euler(0,0,0,'YXZ');
 function raycast(){_rE.set(plr.pitch,plr.yaw,0);_rD.set(0,0,-1).applyEuler(_rE);_rO.set(plr.pos.x,plr.pos.y+PE,plr.pos.z);let prev=null;for(let d=0;d<REACH;d+=.04){const px=_rO.x+_rD.x*d,py=_rO.y+_rD.y*d,pz=_rO.z+_rD.z*d;const bx=Math.floor(px),by=Math.floor(py),bz=Math.floor(pz);if(getB(bx,by,bz)!==B.AIR)return{block:{x:bx,y:by,z:bz},prev};const np={x:bx,y:by,z:bz};if(!prev||prev.x!==np.x||prev.y!==np.y||prev.z!==np.z)prev=np;}return null;}
-function tryPunchMob(){_rE.set(plr.pitch,plr.yaw,0);_rD.set(0,0,-1).applyEuler(_rE);_rO.set(plr.pos.x,plr.pos.y+PE,plr.pos.z);let best=null,bestT=REACH+1;for(const m of mobs){if(!m.alive)continue;const c=m.pos.clone();c.y+=.9;const oc=_rO.clone().sub(c);const b=oc.dot(_rD),cv2=oc.dot(oc)-.7*.7,disc=b*b-cv2;if(disc<0)continue;const t=-b-Math.sqrt(disc);if(t<0||t>bestT)continue;best=m;bestT=t;}if(!best)return false;best.takeDamage(5);plrAtkCd=.4;return true;}
+function tryPunchMob(){_rE.set(plr.pitch,plr.yaw,0);_rD.set(0,0,-1).applyEuler(_rE);_rO.set(plr.pos.x,plr.pos.y+PE,plr.pos.z);let best=null,bestT=REACH+1;for(const m of mobs){if(!m.alive)continue;const c=m.pos.clone();c.y+=.9;const oc=_rO.clone().sub(c);const b=oc.dot(_rD),cv2=oc.dot(oc)-.7*.7,disc=b*b-cv2;if(disc<0)continue;const t=-b-Math.sqrt(disc);if(t<0||t>bestT)continue;best=m;bestT=t;}if(!best)return false;best.takeDamage(getAttackDmg());if(equipped.sword)useSwordDurability();plrAtkCd=.4;return true;}
 
 // ── Collision ─────────────────────────────────────────────────────────────────
 function aabbHit(pos){for(let x=Math.floor(pos.x-PR);x<=Math.floor(pos.x+PR-.001);x++)for(let y=Math.floor(pos.y);y<=Math.floor(pos.y+PH-.001);y++)for(let z=Math.floor(pos.z-PR);z<=Math.floor(pos.z+PR-.001);z++)if(solid(x,y,z))return true;return false;}
@@ -1056,6 +1152,7 @@ function saveGame(){
       chestData,
       toolDurability:Object.fromEntries(Object.entries(toolDurability).map(([k,v])=>[k,v])),
       selSlot,
+      equipped:{armor:equipped.armor,pick:equipped.pick,sword:equipped.sword},
       airtags:airtags.map(a=>({x:a.x,y:a.y,z:a.z})),
     }));
   }catch(e){console.warn('Save failed',e);}
@@ -1079,6 +1176,7 @@ function loadGame(){
     for(const[k,v]of Object.entries(d.chestData||{}))chestData[k]=v;
     for(const[k,v]of Object.entries(d.toolDurability||{}))toolDurability[+k]=v;
     if(d.selSlot!=null)selSlot=d.selSlot;
+    if(d.equipped){equipped.armor=d.equipped.armor||null;equipped.pick=d.equipped.pick||null;equipped.sword=d.equipped.sword||null;}
     for(const a of(d.airtags||[])){
       const spr=makeAirtagSprite();spr.position.set(a.x+.5,a.y+.2,a.z+.5);scene.add(spr);
       airtags.push({x:a.x,y:a.y,z:a.z,spr});
