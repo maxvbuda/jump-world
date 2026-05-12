@@ -1128,7 +1128,7 @@ class Mob{
     }
     meshDirty=true;
     const dist=this.pos.distanceTo(plr.pos);
-    if(dist<5){const dmg=Math.round(40*(1-dist/5));plrHP=Math.max(0,plrHP-dmg);updateHearts();flashRed();if(plrHP<=0)gameOver();}
+    if(dist<5){plrDmgCd=0;damagePlayer(Math.round(40*(1-dist/5)));}
     toast('💥 Creeper exploded!');
     this.die();
   }
