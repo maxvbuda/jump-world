@@ -435,7 +435,7 @@ const waterMesh=(()=>{
   const geo=new THREE.PlaneGeometry(WW,WD);
   const mat=new THREE.MeshLambertMaterial({color:0x1a6bb5,transparent:true,opacity:0.72,depthWrite:false});
   const mesh=new THREE.Mesh(geo,mat);
-  mesh.rotation.x=-Math.PI/2;mesh.position.set(WW/2,SEA,WD/2);
+  mesh.rotation.x=-Math.PI/2;mesh.position.set(WW/2,SEA+0.02,WD/2);
   scene.add(mesh);return mesh;
 })();
 
