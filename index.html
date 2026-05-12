@@ -370,7 +370,7 @@ function equipItem(type){const slot=equipSlotFor(type);if(!slot)return;if(equipp
 function unequipSlot(slot){if(!equipped[slot])return;addItem(equipped[slot],1);equipped[slot]=null;renderPlayerUI();updateArmorBar();}
 
 // ── World ─────────────────────────────────────────────────────────────────────
-const WW=56,WH=32,WD=56;
+const WW=200,WH=52,WD=200;
 const PH=1.8,PE=1.6,PR=0.28;
 const GRAV=-24,JVEL=8.5,SPD=4.8,SPRINT=9.0,REACH=6;
 const world=new Uint8Array(WW*WH*WD);
@@ -379,25 +379,25 @@ function getB(x,y,z){if(x<0||x>=WW||y<0||y>=WH||z<0||z>=WD)return B.STONE;return
 function setB(x,y,z,t){if(x<0||x>=WW||y<0||y>=WH||z<0||z>=WD)return;world[wi(x,y,z)]=t;meshDirty=true;}
 function solid(x,y,z){return getB(x,y,z)!==B.AIR;}
 
-function h2d(x,z){return 10+Math.sin(x*.09+1.2)*3.5+Math.cos(z*.09+.7)*3.5+Math.sin(x*.22+3)*1.5+Math.cos(z*.18+5)*1.5+Math.sin(x*.55+7)*.6+Math.cos(z*.47+2)*.6;}
+function h2d(x,z){return 12+Math.sin(x*.055+1.2)*6+Math.cos(z*.055+.7)*6+Math.sin(x*.13+3)*3+Math.cos(z*.11+5)*3+Math.sin(x*.28+7)*1.5+Math.cos(z*.24+2)*1.5+Math.sin(x*.6+4)*.6+Math.cos(z*.5+9)*.6;}
 function genWorld(){
   for(let x=0;x<WW;x++)for(let z=0;z<WD;z++){
     const top=Math.round(h2d(x,z));
     for(let y=0;y<WH;y++){let b=B.AIR;if(y<top-4)b=B.STONE;else if(y<top-1)b=B.DIRT;else if(y===top-1)b=B.GRASS;world[wi(x,y,z)]=b;}
   }
   // Cobble veins
-  for(let i=0;i<60;i++){const px=1+Math.random()*(WW-2)|0,py=1+Math.random()*10|0,pz=1+Math.random()*(WD-2)|0;for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)if(Math.random()<.6&&getB(px+dx,py+dy,pz+dz)===B.STONE)world[wi(px+dx,py+dy,pz+dz)]=B.COBBLE;}
-  // Diamond ore (deep) — 3D clusters, y=1–9
-  for(let i=0;i<60;i++){const px=1+Math.random()*(WW-2)|0,py=1+(Math.random()*8|0),pz=1+Math.random()*(WD-2)|0;for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)if(Math.random()<.55&&getB(px+dx,py+dy,pz+dz)===B.STONE)world[wi(px+dx,py+dy,pz+dz)]=B.DIAMOND_ORE;}
-  // Netherite ore (deepest) — y=1–4
-  for(let i=0;i<25;i++){const px=1+Math.random()*(WW-2)|0,py=1+(Math.random()*3|0),pz=1+Math.random()*(WD-2)|0;for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)if(Math.random()<.5&&getB(px+dx,py,pz+dz)===B.STONE)world[wi(px+dx,py,pz+dz)]=B.NETHERITE_ORE;}
+  for(let i=0;i<280;i++){const px=1+Math.random()*(WW-2)|0,py=1+Math.random()*14|0,pz=1+Math.random()*(WD-2)|0;for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)if(Math.random()<.6&&getB(px+dx,py+dy,pz+dz)===B.STONE)world[wi(px+dx,py+dy,pz+dz)]=B.COBBLE;}
+  // Diamond ore (deep) — 3D clusters, y=1–12
+  for(let i=0;i<280;i++){const px=1+Math.random()*(WW-2)|0,py=1+(Math.random()*11|0),pz=1+Math.random()*(WD-2)|0;for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)if(Math.random()<.55&&getB(px+dx,py+dy,pz+dz)===B.STONE)world[wi(px+dx,py+dy,pz+dz)]=B.DIAMOND_ORE;}
+  // Netherite ore (deepest) — y=1–5
+  for(let i=0;i<110;i++){const px=1+Math.random()*(WW-2)|0,py=1+(Math.random()*4|0),pz=1+Math.random()*(WD-2)|0;for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)if(Math.random()<.5&&getB(px+dx,py,pz+dz)===B.STONE)world[wi(px+dx,py,pz+dz)]=B.NETHERITE_ORE;}
   // Trees
-  for(let i=0;i<35;i++){const tx=4+Math.random()*(WW-8)|0,tz=4+Math.random()*(WD-8)|0;let ty=WH-1;while(ty>0&&getB(tx,ty,tz)===B.AIR)ty--;ty++;if(ty+7>=WH||getB(tx,ty-1,tz)!==B.GRASS)continue;const th=4+(Math.random()*2|0);for(let j=0;j<th;j++)world[wi(tx,ty+j,tz)]=B.WOOD;for(let lx=-2;lx<=2;lx++)for(let lz=-2;lz<=2;lz++)for(let ly=0;ly<=3;ly++){if(Math.abs(lx)+Math.abs(lz)>3-ly*.6)continue;const bx=tx+lx,by=ty+th-1+ly,bz=tz+lz;if(bx<0||bx>=WW||by<0||by>=WH||bz<0||bz>=WD)continue;if(world[wi(bx,by,bz)]===B.AIR)world[wi(bx,by,bz)]=B.LEAVES;}}
+  for(let i=0;i<420;i++){const tx=4+Math.random()*(WW-8)|0,tz=4+Math.random()*(WD-8)|0;let ty=WH-1;while(ty>0&&getB(tx,ty,tz)===B.AIR)ty--;ty++;if(ty+7>=WH||getB(tx,ty-1,tz)!==B.GRASS)continue;const th=4+(Math.random()*2|0);for(let j=0;j<th;j++)world[wi(tx,ty+j,tz)]=B.WOOD;for(let lx=-2;lx<=2;lx++)for(let lz=-2;lz<=2;lz++)for(let ly=0;ly<=3;ly++){if(Math.abs(lx)+Math.abs(lz)>3-ly*.6)continue;const bx=tx+lx,by=ty+th-1+ly,bz=tz+lz;if(bx<0||bx>=WW||by<0||by>=WH||bz<0||bz>=WD)continue;if(world[wi(bx,by,bz)]===B.AIR)world[wi(bx,by,bz)]=B.LEAVES;}}
 }
 
 // ── Three.js ──────────────────────────────────────────────────────────────────
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x8ec8f0);scene.fog=new THREE.Fog(0x8ec8f0,35,80);
+scene.background=new THREE.Color(0x8ec8f0);scene.fog=new THREE.Fog(0x8ec8f0,60,180);
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.05,200);
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);
@@ -408,8 +408,8 @@ scene.add(new THREE.AmbientLight(0xc8d8ff,.65));
 const sun=new THREE.DirectionalLight(0xfff8e8,1.3);
 sun.position.set(WW*.5+30,80,WD*.5+20);sun.target.position.set(WW*.5,0,WD*.5);
 sun.castShadow=true;sun.shadow.mapSize.width=2048;sun.shadow.mapSize.height=2048;
-sun.shadow.camera.near=1;sun.shadow.camera.far=220;
-sun.shadow.camera.left=-65;sun.shadow.camera.right=65;sun.shadow.camera.top=65;sun.shadow.camera.bottom=-65;
+sun.shadow.camera.near=1;sun.shadow.camera.far=300;
+sun.shadow.camera.left=-80;sun.shadow.camera.right=80;sun.shadow.camera.top=80;sun.shadow.camera.bottom=-80;
 sun.shadow.bias=-0.0005;sun.target.updateMatrixWorld();scene.add(sun);
 const hlMesh=new THREE.Mesh(new THREE.BoxGeometry(1.005,1.005,1.005),new THREE.MeshBasicMaterial({color:0,wireframe:true,transparent:true,opacity:.45}));
 hlMesh.visible=false;scene.add(hlMesh);
@@ -1001,7 +1001,7 @@ class Mob{
   moveAndCollide(dt){const pos=this.pos,vel=this.vel;pos.x+=vel.x*dt;if(this.aabb(pos)){pos.x-=vel.x*dt;vel.x=0;this.wanderAngle+=Math.PI*(.4+Math.random()*.6);}pos.z+=vel.z*dt;if(this.aabb(pos)){pos.z-=vel.z*dt;vel.z=0;this.wanderAngle+=Math.PI*(.4+Math.random()*.6);}this.onGround=false;const steps=Math.max(1,Math.ceil(Math.abs(vel.y*dt)/.4));const sy=vel.y*dt/steps;for(let i=0;i<steps;i++){pos.y+=sy;if(this.aabb(pos)){pos.y-=sy;if(vel.y<0)this.onGround=true;vel.y=0;break;}}pos.x=Math.max(1,Math.min(WW-1,pos.x));pos.z=Math.max(1,Math.min(WD-1,pos.z));if(pos.y<0){pos.y=0;vel.y=0;this.onGround=true;}}
   update(dt){if(!this.alive)return;this.atkCd=Math.max(0,this.atkCd-dt);this.dmgCd=Math.max(0,this.dmgCd-dt);this.hpShow=Math.max(0,this.hpShow-dt);this.animT+=dt;const dsq=this.pos.distanceToSquared(plr.pos);if(this.def.hostile&&dsq<18*18){const dir=new THREE.Vector3().subVectors(plr.pos,this.pos);dir.y=0;const len=dir.length();if(len>.1)dir.divideScalar(len);this.vel.x=dir.x*this.def.speed;this.vel.z=dir.z*this.def.speed;this.mesh.rotation.y=Math.atan2(dir.x,dir.z);this.moving=true;if(this.onGround&&len>.8){const fx=this.pos.x+dir.x*.7,fz=this.pos.z+dir.z*.7;if(solid(Math.floor(fx),Math.floor(this.pos.y+.2),Math.floor(fz)))this.vel.y=6.5;}if(dsq<2.5*2.5&&this.atkCd===0){damagePlayer(2);this.atkCd=1.0;}}else{this.wanderTimer-=dt;if(this.wanderTimer<=0){this.wanderTimer=2+Math.random()*5;this.moving=Math.random()>.35;if(this.moving)this.wanderAngle=Math.random()*Math.PI*2;}if(this.moving){this.vel.x=Math.sin(this.wanderAngle)*this.def.speed;this.vel.z=Math.cos(this.wanderAngle)*this.def.speed;this.mesh.rotation.y=-this.wanderAngle;}else{this.vel.x=0;this.vel.z=0;}}this.vel.y+=GRAV*dt;this.vel.y=Math.max(this.vel.y,-30);if(this.onGround&&this.vel.y<0)this.vel.y=0;this.moveAndCollide(dt);if(this.moving&&this.mesh._legs){const sw=Math.sin(this.animT*8)*.4;this.mesh._legs.forEach((l,i)=>l.rotation.x=i%2===0?sw:-sw);}else if(this.mesh._legs)this.mesh._legs.forEach(l=>l.rotation.x=0);const bob=this.moving?Math.sin(this.animT*8)*.03:0;this.mesh.position.set(this.pos.x,this.pos.y+bob,this.pos.z);this.hpSpr.visible=this.hpShow>0;this.hpSpr.position.set(this.pos.x,this.pos.y+2.2,this.pos.z);if(this.pos.y<-10)this.die();}
 }
-function spawnMobs(){['pig','pig','pig','pig','pig','pig','sheep','sheep','sheep','sheep','lamb','lamb','lamb','lamb','zombie','zombie','zombie','zombie','zombie'].forEach(t=>{const x=5+Math.random()*(WW-10),z=5+Math.random()*(WD-10);let y=WH-1;while(y>0&&getB(Math.floor(x),y,Math.floor(z))===B.AIR)y--;mobs.push(new Mob(t,x,y+1,z));});}
+function spawnMobs(){['pig','pig','pig','pig','pig','pig','pig','pig','pig','pig','pig','pig','sheep','sheep','sheep','sheep','sheep','sheep','sheep','sheep','lamb','lamb','lamb','lamb','lamb','lamb','zombie','zombie','zombie','zombie','zombie','zombie','zombie','zombie','zombie','zombie'].forEach(t=>{const x=5+Math.random()*(WW-10),z=5+Math.random()*(WD-10);let y=WH-1;while(y>0&&getB(Math.floor(x),y,Math.floor(z))===B.AIR)y--;mobs.push(new Mob(t,x,y+1,z));});}
 
 // ── Player ────────────────────────────────────────────────────────────────────
 const plr={pos:new THREE.Vector3(),vel:new THREE.Vector3(),yaw:0,pitch:0,onGround:false,fly:false};
@@ -1093,6 +1093,7 @@ function update(dt){
   if(plr.fly){plr.vel.x=mx*spd;plr.vel.z=mz*spd;if(keys['Space'])plr.vel.y=spd;else if(keys['ControlLeft']||keys['ControlRight'])plr.vel.y=-spd;else plr.vel.y=0;plr.pos.addScaledVector(plr.vel,dt);}
   else{plr.vel.x=mx*spd;plr.vel.z=mz*spd;if(keys['Space']&&plr.onGround){plr.vel.y=JVEL;plr.onGround=false;}plr.vel.y+=GRAV*dt;plr.vel.y=Math.max(plr.vel.y,-35);moveAndCollide(dt);}
   camera.position.set(plr.pos.x,plr.pos.y+PE,plr.pos.z);camera.rotation.order='YXZ';camera.rotation.y=plr.yaw;camera.rotation.x=plr.pitch;
+  sun.position.set(plr.pos.x+40,80,plr.pos.z+30);sun.target.position.set(plr.pos.x,0,plr.pos.z);sun.target.updateMatrixWorld();
 
   const hit=raycast();
   if(hit){
