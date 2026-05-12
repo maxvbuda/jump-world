@@ -3,18 +3,42 @@ const http = require('http');
 const WebSocket = require('ws');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const fs = require('fs');
 const path = require('path');
-const GAME_FILE = path.join(__dirname, 'index.html');
+const { MongoClient } = require('mongodb');
 
+const GAME_FILE = path.join(__dirname, 'index.html');
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'jump-world-secret-change-in-prod';
-const USERS_FILE = path.join(__dirname, 'users.json');
-const WORLD_SEED = 42; // fixed seed so all clients get same terrain
+const MONGO_URI = process.env.MONGO_URI;
+const WORLD_SEED = 42;
+
+// MongoDB setup
+let usersCol;
+async function connectDB() {
+  if (!MONGO_URI) { console.warn('No MONGO_URI — using in-memory user store'); return; }
+  const client = new MongoClient(MONGO_URI);
+  await client.connect();
+  const db = client.db('jump-world');
+  usersCol = db.collection('users');
+  await usersCol.createIndex({ username: 1 }, { unique: true });
+  console.log('MongoDB connected');
+}
+connectDB().catch(console.error);
+
+// Fallback in-memory store when no MongoDB
+const memUsers = {};
+async function findUser(username) {
+  if (usersCol) return usersCol.findOne({ username });
+  return memUsers[username] || null;
+}
+async function createUser(username, hash) {
+  if (usersCol) return usersCol.insertOne({ username, hash, createdAt: new Date() });
+  memUsers[username] = { username, hash, createdAt: Date.now() };
+}
 
 app.use(express.json());
 app.get('/', (req, res) => res.sendFile(GAME_FILE));
@@ -26,26 +50,15 @@ app.use((req, res, next) => {
   next();
 });
 
-function readUsers() {
-  if (!fs.existsSync(USERS_FILE)) return {};
-  try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch { return {}; }
-}
-
-function writeUsers(users) {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-}
-
 app.get('/seed', (req, res) => res.json({ seed: WORLD_SEED }));
 
 app.post('/register', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
   if (!/^[a-zA-Z0-9_]{2,20}$/.test(username)) return res.status(400).json({ error: 'Username must be 2-20 alphanumeric chars' });
-  const users = readUsers();
-  if (users[username]) return res.status(409).json({ error: 'Username taken' });
+  if (await findUser(username)) return res.status(409).json({ error: 'Username taken' });
   const hash = await bcrypt.hash(password, 10);
-  users[username] = { hash, createdAt: Date.now() };
-  writeUsers(users);
+  await createUser(username, hash);
   const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, username });
 });
@@ -53,8 +66,7 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
-  const users = readUsers();
-  const user = users[username];
+  const user = await findUser(username);
   if (!user) return res.status(401).json({ error: 'Invalid credentials' });
   const ok = await bcrypt.compare(password, user.hash);
   if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
@@ -92,14 +104,11 @@ wss.on('connection', (ws) => {
       authed = true;
       players.set(ws, { username, x: 0, y: 20, z: 0, yaw: 0 });
 
-      // send current players list to new client
       const others = [];
       for (const [, p] of players) {
         if (p.username !== username) others.push({ username: p.username, x: p.x, y: p.y, z: p.z, yaw: p.yaw });
       }
       ws.send(JSON.stringify({ type: 'init', players: others }));
-
-      // tell everyone else this player joined
       broadcast({ type: 'join', username, x: 0, y: 20, z: 0, yaw: 0 }, ws);
       console.log(`+ ${username} (${players.size} online)`);
       return;
