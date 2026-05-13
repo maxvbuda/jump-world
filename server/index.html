@@ -683,7 +683,7 @@ const RECIPES=[
   {desc:'Stone Sword (2 Cobble + handle)', pattern:[[B.COBBLE],[B.COBBLE],[B.PLANKS]], output:IT.STONE_SWORD,    count:1},
   {desc:'Diamond Sword',                   pattern:[[B.DIAMOND_ORE],[B.DIAMOND_ORE],[B.PLANKS]], output:IT.DIAMOND_SWORD, count:1},
   {desc:'Netherite Sword',                 pattern:[[B.NETHERITE_ORE],[B.NETHERITE_ORE],[B.PLANKS]], output:IT.NETHERITE_SWORD,count:1},
-  {desc:'Lantern ×4 (1 Diamond + 4 Wood)',shapeless:true,ingredients:{[B.DIAMOND_ORE]:1,[B.WOOD]:4},output:B.LANTERN,count:4},
+  {desc:'Lantern ×4 (4 Wood 2×2)',pattern:[[B.WOOD,B.WOOD],[B.WOOD,B.WOOD]],output:B.LANTERN,count:4},
 ];
 
 function matchRecipe(){
