@@ -26,6 +26,7 @@ canvas { display:block; }
 #dmg-flash { position:fixed;inset:0;background:rgba(200,0,0,0);pointer-events:none;transition:background 0.3s;z-index:5; }
 #hunger-flash { position:fixed;inset:0;background:rgba(100,60,0,0);pointer-events:none;transition:background 0.5s;z-index:4; }
 #vignette { position:fixed;inset:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,0.6) 100%);pointer-events:none;z-index:2; }
+#underwater { position:fixed;inset:0;background:rgba(15,60,160,0.38);pointer-events:none;z-index:6;opacity:0;transition:opacity 0.25s; }
 /* Menus */
 #menu,#gameover { position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;font-family:'Courier New',monospace; }
 #menu { background:rgba(0,0,0,0.85);z-index:100; }
@@ -274,6 +275,7 @@ canvas { display:block; }
 <div id="dmg-flash"></div>
 <div id="hunger-flash"></div>
 <div id="vignette"></div>
+<div id="underwater"></div>
 <div id="cross">+</div>
 <div id="status-bars">
   <div id="hearts"></div>
@@ -390,7 +392,7 @@ const SEA=15;
 function genWorld(){
   for(let x=0;x<WW;x++)for(let z=0;z<WD;z++){
     const top=Math.round(h2d(x,z));const isSea=top<SEA;
-    for(let y=0;y<WH;y++){let b=B.AIR;if(y<top-4)b=B.STONE;else if(y<top-1)b=B.DIRT;else if(y<top)b=(isSea?B.SAND:B.GRASS);else if(y<SEA)b=B.SAND;world[wi(x,y,z)]=b;}
+    for(let y=0;y<WH;y++){let b=B.AIR;if(y<top-4)b=B.STONE;else if(y<top-1)b=B.DIRT;else if(y<top)b=(isSea?B.SAND:B.GRASS);else if(y<SEA-1)b=B.SAND;world[wi(x,y,z)]=b;}
   }
   // Cobble veins
   for(let i=0;i<280;i++){const px=1+Math.random()*(WW-2)|0,py=1+Math.random()*14|0,pz=1+Math.random()*(WD-2)|0;for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)if(Math.random()<.6&&getB(px+dx,py+dy,pz+dz)===B.STONE)world[wi(px+dx,py+dy,pz+dz)]=B.COBBLE;}
@@ -1344,7 +1346,22 @@ function update(dt){
   const mlen=Math.hypot(mx,mz);if(mlen>0){mx/=mlen;mz/=mlen;}
   const spd=(keys['ShiftLeft']||keys['ShiftRight'])?SPRINT:SPD;
   if(plr.fly){plr.vel.x=mx*spd;plr.vel.z=mz*spd;if(keys['Space'])plr.vel.y=spd;else if(keys['ControlLeft']||keys['ControlRight'])plr.vel.y=-spd;else plr.vel.y=0;plr.pos.addScaledVector(plr.vel,dt);}
-  else{plr.vel.x=mx*spd;plr.vel.z=mz*spd;if(keys['Space']&&plr.onGround){plr.vel.y=JVEL;plr.onGround=false;}plr.vel.y+=GRAV*dt;plr.vel.y=Math.max(plr.vel.y,-35);moveAndCollide(dt);}
+  else{
+    const inWater=plr.pos.y<SEA&&!plr.fly;
+    document.getElementById('underwater').style.opacity=inWater?'1':'0';
+    const wSpd=inWater?spd*0.62:spd;
+    plr.vel.x=mx*wSpd;plr.vel.z=mz*wSpd;
+    if(inWater){
+      plr.vel.y+=GRAV*0.12*dt;
+      if(keys['Space'])plr.vel.y=3.2;
+      else if(keys['ShiftLeft']||keys['ShiftRight'])plr.vel.y=-2.5;
+      plr.vel.y=Math.max(plr.vel.y,-3.5);
+    }else{
+      if(keys['Space']&&plr.onGround){plr.vel.y=JVEL;plr.onGround=false;}
+      plr.vel.y+=GRAV*dt;plr.vel.y=Math.max(plr.vel.y,-35);
+    }
+    moveAndCollide(dt);
+  }
   camera.position.set(plr.pos.x,plr.pos.y+PE,plr.pos.z);camera.rotation.order='YXZ';camera.rotation.y=plr.yaw;camera.rotation.x=plr.pitch;
   sun.position.set(plr.pos.x+40,80,plr.pos.z+30);sun.target.position.set(plr.pos.x,0,plr.pos.z);sun.target.updateMatrixWorld();
 
