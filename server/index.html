@@ -311,7 +311,7 @@ canvas { display:block; }
 'use strict';
 
 // ── Block IDs ─────────────────────────────────────────────────────────────────
-const B={AIR:0,GRASS:1,DIRT:2,STONE:3,SAND:4,WOOD:5,LEAVES:6,COBBLE:7,CRAFTING:8,PLANKS:9,BRICK:10,GLASS:11,CHEST:12,FENCE:13,DIAMOND_ORE:14,NETHERITE_ORE:15,SHOP:16};
+const B={AIR:0,GRASS:1,DIRT:2,STONE:3,SAND:4,WOOD:5,LEAVES:6,COBBLE:7,CRAFTING:8,PLANKS:9,BRICK:10,GLASS:11,CHEST:12,FENCE:13,DIAMOND_ORE:14,NETHERITE_ORE:15,SHOP:16,LANTERN:17};
 const BCOL={
   [B.GRASS]:       {top:[93,168,52],  side:[130,90,55],   bot:[130,90,55]},
   [B.DIRT]:        {top:[130,90,55],  side:[130,90,55],   bot:[130,90,55]},
@@ -329,8 +329,9 @@ const BCOL={
   [B.DIAMOND_ORE]: {top:[80,200,230], side:[70,180,210],  bot:[70,180,210]},
   [B.NETHERITE_ORE]:{top:[60,40,70],  side:[55,35,65],    bot:[50,30,60]},
   [B.SHOP]:         {top:[255,215,0], side:[220,180,0],   bot:[180,140,0]},
+  [B.LANTERN]:      {top:[255,210,80],side:[240,180,60],  bot:[200,140,40]},
 };
-const BNAME={[B.GRASS]:'Grass',[B.DIRT]:'Dirt',[B.STONE]:'Stone',[B.SAND]:'Sand',[B.WOOD]:'Wood',[B.LEAVES]:'Leaves',[B.COBBLE]:'Cobble',[B.CRAFTING]:'Craft Table',[B.PLANKS]:'Planks',[B.BRICK]:'Brick',[B.GLASS]:'Glass',[B.CHEST]:'Chest',[B.FENCE]:'Fence',[B.DIAMOND_ORE]:'Diamond',[B.NETHERITE_ORE]:'Netherite',[B.SHOP]:'Diamond Shop'};
+const BNAME={[B.GRASS]:'Grass',[B.DIRT]:'Dirt',[B.STONE]:'Stone',[B.SAND]:'Sand',[B.WOOD]:'Wood',[B.LEAVES]:'Leaves',[B.COBBLE]:'Cobble',[B.CRAFTING]:'Craft Table',[B.PLANKS]:'Planks',[B.BRICK]:'Brick',[B.GLASS]:'Glass',[B.CHEST]:'Chest',[B.FENCE]:'Fence',[B.DIAMOND_ORE]:'Diamond',[B.NETHERITE_ORE]:'Netherite',[B.SHOP]:'Diamond Shop',[B.LANTERN]:'Lantern'};
 
 // ── Item IDs (≥100, non-placeable) ────────────────────────────────────────────
 const IT={MEAT:100,WOOD_PICK:101,STONE_PICK:102,DIAMOND_PICK:103,WOOD_ARMOR:104,STONE_ARMOR:105,DIAMOND_ARMOR:106,NETHERITE_ARMOR:107,AIRTAG:109,PORK:110,LAMB_MEAT:111,WOOD_SWORD:112,STONE_SWORD:113,DIAMOND_SWORD:114,NETHERITE_SWORD:115,BEEF:116,CHICKEN_MEAT:117};
@@ -378,7 +379,10 @@ const GRAV=-24,JVEL=8.5,SPD=4.8,SPRINT=9.0,REACH=6;
 const world=new Uint8Array(WW*WH*WD);
 function wi(x,y,z){return x+y*WW+z*WW*WH;}
 function getB(x,y,z){if(x<0||x>=WW||y<0||y>=WH||z<0||z>=WD)return B.STONE;return world[wi(x,y,z)];}
-function setB(x,y,z,t){if(x<0||x>=WW||y<0||y>=WH||z<0||z>=WD)return;world[wi(x,y,z)]=t;meshDirty=true;}
+const lanternLights=new Map();
+function addLanternLight(x,y,z){const k=`${x},${y},${z}`;if(lanternLights.has(k))return;const l=new THREE.PointLight(0xffcc44,3.5,14,2);l.position.set(x+.5,y+.7,z+.5);scene.add(l);lanternLights.set(k,l);}
+function removeLanternLight(x,y,z){const k=`${x},${y},${z}`;const l=lanternLights.get(k);if(l){scene.remove(l);lanternLights.delete(k);}}
+function setB(x,y,z,t){if(x<0||x>=WW||y<0||y>=WH||z<0||z>=WD)return;const old=world[wi(x,y,z)];world[wi(x,y,z)]=t;meshDirty=true;if(old===B.LANTERN)removeLanternLight(x,y,z);if(t===B.LANTERN)addLanternLight(x,y,z);}
 function solid(x,y,z){return getB(x,y,z)!==B.AIR;}
 
 function h2d(x,z){return 12+Math.sin(x*.055+1.2)*6+Math.cos(z*.055+.7)*6+Math.sin(x*.13+3)*3+Math.cos(z*.11+5)*3+Math.sin(x*.28+7)*1.5+Math.cos(z*.24+2)*1.5+Math.sin(x*.6+4)*.6+Math.cos(z*.5+9)*.6;}
@@ -450,7 +454,7 @@ const starField=(()=>{
 })();
 
 // ── Texture Atlas ─────────────────────────────────────────────────────────────
-const TILE=32,TPR=8,NUM_TILES=18,ATLAS_ROWS=Math.ceil(NUM_TILES/TPR);
+const TILE=32,TPR=8,NUM_TILES=19,ATLAS_ROWS=Math.ceil(NUM_TILES/TPR);
 const atlasCv=document.createElement('canvas');atlasCv.width=TILE*TPR;atlasCv.height=TILE*ATLAS_ROWS;
 const atx=atlasCv.getContext('2d');
 let _ts=12345;
@@ -510,6 +514,14 @@ fillT(16,52,32,62,18);
 // 17 shop (gold)
 fillT(17,212,168,0,24);
 {const{x,y}=txy(17);[[8,8],[24,24],[8,24],[24,8],[16,16]].forEach(([sx,sy])=>{atx.fillStyle='rgba(255,255,255,0.85)';atx.beginPath();atx.moveTo(x+sx,y+sy-3);atx.lineTo(x+sx+1,y+sy);atx.lineTo(x+sx,y+sy+3);atx.lineTo(x+sx-1,y+sy);atx.closePath();atx.fill();});}
+// 18 lantern (glowing amber)
+fillT(18,200,140,40,18);
+{const{x,y}=txy(18);
+  const grd=atx.createRadialGradient(x+TILE/2,y+TILE/2,2,x+TILE/2,y+TILE/2,TILE/2);
+  grd.addColorStop(0,'rgba(255,240,120,0.95)');grd.addColorStop(0.45,'rgba(255,180,40,0.7)');grd.addColorStop(1,'rgba(160,80,0,0)');
+  atx.fillStyle=grd;atx.fillRect(x,y,TILE,TILE);
+  atx.strokeStyle='rgba(80,40,0,0.7)';atx.lineWidth=1.5;atx.strokeRect(x+3,y+3,TILE-6,TILE-6);
+  atx.fillStyle='rgba(255,255,180,0.9)';atx.beginPath();atx.arc(x+TILE/2,y+TILE/2,4,0,Math.PI*2);atx.fill();}
 
 const atlasTex=new THREE.CanvasTexture(atlasCv);
 atlasTex.magFilter=THREE.NearestFilter;atlasTex.minFilter=THREE.NearestFilter;atlasTex.generateMipmaps=false;
@@ -523,6 +535,7 @@ const TILE_FACE={
   [B.GLASS]:{top:12,side:12,bot:12},[B.CHEST]:{top:13,side:14,bot:2},
   [B.FENCE]:{top:10,side:10,bot:10},[B.DIAMOND_ORE]:{top:15,side:15,bot:15},
   [B.NETHERITE_ORE]:{top:16,side:16,bot:16},[B.SHOP]:{top:17,side:17,bot:17},
+  [B.LANTERN]:{top:18,side:18,bot:18},
 };
 function getTileIdx(b,fi){const f=TILE_FACE[b];if(!f)return 3;return fi===2?f.top:fi===3?f.bot:f.side;}
 function tileUVs(ti){const tc=ti%TPR,tr=Math.floor(ti/TPR);const u0=tc/TPR,u1=(tc+1)/TPR,v0=1-(tr+1)/ATLAS_ROWS,v1=1-tr/ATLAS_ROWS;return[[u0,v0],[u0,v1],[u1,v1],[u1,v0]];}
@@ -670,6 +683,7 @@ const RECIPES=[
   {desc:'Stone Sword (2 Cobble + handle)', pattern:[[B.COBBLE],[B.COBBLE],[B.PLANKS]], output:IT.STONE_SWORD,    count:1},
   {desc:'Diamond Sword',                   pattern:[[B.DIAMOND_ORE],[B.DIAMOND_ORE],[B.PLANKS]], output:IT.DIAMOND_SWORD, count:1},
   {desc:'Netherite Sword',                 pattern:[[B.NETHERITE_ORE],[B.NETHERITE_ORE],[B.PLANKS]], output:IT.NETHERITE_SWORD,count:1},
+  {desc:'Lantern ×4 (1 Diamond + 4 Wood)',shapeless:true,ingredients:{[B.DIAMOND_ORE]:1,[B.WOOD]:4},output:B.LANTERN,count:4},
 ];
 
 function matchRecipe(){
@@ -1482,6 +1496,8 @@ function loadGame(){
       const spr=makeAirtagSprite();spr.position.set(a.x+.5,a.y+.2,a.z+.5);scene.add(spr);
       airtags.push({x:a.x,y:a.y,z:a.z,spr});
     }
+    // restore lantern lights
+    for(let x=0;x<WW;x++)for(let y=0;y<WH;y++)for(let z=0;z<WD;z++)if(world[wi(x,y,z)]===B.LANTERN)addLanternLight(x,y,z);
     return true;
   }catch(e){console.warn('Load failed',e);return false;}
 }
